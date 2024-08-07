@@ -1,5 +1,8 @@
 const ColorConsole = require('../../services/ColorConsole');
+const DataTools = require('../../services/DataTools/DataTools');
 const ApiClient = require('./ApiClient');
+
+
 
 class TestRail {
     /**
@@ -12,6 +15,7 @@ class TestRail {
     constructor(domain, username, password, isScreenshotsEnabled) {
         this.client = new ApiClient(domain, username, password);
         this.isScreenshotsEnabled = isScreenshotsEnabled;
+        this.dataTools = new DataTools();
     }
 
     /**
@@ -179,7 +183,7 @@ class TestRail {
             results: [],
         };
 
-        ColorConsole.debug('TestRail >> Sending case results to run R' + runID + ': ' + testResults.map((r) => 'C' + r.getCaseId()));
+        // ColorConsole.debug('TestRail >> Sending case results to run R' + runID + ': ' + testResults.map((r) => 'C' + r.getCaseId()));
 
         testResults.forEach((result) => {
             var resultEntry = {
@@ -193,15 +197,22 @@ class TestRail {
             if (result.hasElapsedTime()) {
                 resultEntry.elapsed = result.getElapsed();
             }
-
+            // ColorConsole.debug('Jay >> resultEntry: ' + resultEntry );
+            
             postData.results.push(resultEntry);
         });
-
+        ColorConsole.debug('');
+        // ColorConsole.debug('>> BEFORE postData.results: ' + JSON.stringify(postData));
+        postData.results = this.dataTools.caseDataAggregator(postData.results);
+        // ColorConsole.debug('>> AFTER postData.results: ' + JSON.stringify(postData));
+        ColorConsole.debug('>> INFO on testResults: ' + JSON.stringify(testResults));
         return this.client.sendData(
             url,
             postData,
             (response) => {
-                ColorConsole.success('Results sent to TestRail R' + runID + ' for: ' + testResults.map((r) => 'C' + r.getCaseId()));
+                // ColorConsole.debug('>> case_id list: ' + postData.results.map((r) => r.case_id));
+                //ColorConsole.debug('>> INFO on response: ' + JSON.stringify(response));
+                ColorConsole.success('Cypress-Testrail Cypress results sent to TestRail R' + runID + ' for: ' + postData.results.map((r) => r.case_id));
 
                 if (this.isScreenshotsEnabled) {
                     const allRequests = [];
