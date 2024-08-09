@@ -183,13 +183,12 @@ class TestRail {
             results: [],
         };
 
-        // ColorConsole.debug('TestRail >> Sending case results to run R' + runID + ': ' + testResults.map((r) => 'C' + r.getCaseId()));
-
         testResults.forEach((result) => {
             var resultEntry = {
                 case_id: result.getCaseId(),
                 status_id: result.getStatusId(),
                 comment: result.getComment().trim(),
+                screenshotPaths: result.getScreenshotPaths(),
             };
 
             // only add an elapsed time, if a valid value exists
@@ -197,45 +196,45 @@ class TestRail {
             if (result.hasElapsedTime()) {
                 resultEntry.elapsed = result.getElapsed();
             }
-            // ColorConsole.debug('Jay >> resultEntry: ' + resultEntry );
             
             postData.results.push(resultEntry);
         });
         ColorConsole.debug('');
         // ColorConsole.debug('>> BEFORE postData.results: ' + JSON.stringify(postData));
-        postData.results = this.dataTools.caseDataAggregator(postData.results);
-        // ColorConsole.debug('>> AFTER postData.results: ' + JSON.stringify(postData));
-        ColorConsole.debug('>> INFO on testResults: ' + JSON.stringify(testResults));
+        postData.results = this.dataTools.caseDataAggregator(postData.results); // cypress-testrail-greenwich mod
+        // ColorConsole.debug('>> AFTER postData.results: ' + JSON.stringify(postData)); 
+
         return this.client.sendData(
             url,
             postData,
             (response) => {
-                // ColorConsole.debug('>> case_id list: ' + postData.results.map((r) => r.case_id));
-                //ColorConsole.debug('>> INFO on response: ' + JSON.stringify(response));
-                ColorConsole.success('Cypress-Testrail Cypress results sent to TestRail R' + runID + ' for: ' + postData.results.map((r) => r.case_id));
+                
+                ColorConsole.success('Cypress-TestRail:');
+                ColorConsole.debug('    using sendBatchResults');
+                ColorConsole.success('    cypress results sent to TestRail R' + runID + ' for: ' 
+                    + postData.results.map((r) => 'C' + r.case_id)); // cypress-testrail-greenwich mod
 
                 if (this.isScreenshotsEnabled) {
                     const allRequests = [];
-
-                    testResults.forEach((result, i) => {
-                        const screenshotPaths = result.getScreenshotPaths();
+                    
+                    postData.results.forEach((result, i) => { // cypress-testrail-greenwich mod
+                        const screenshotPaths = result.screenshotPaths; // cypress-testrail-greenwich mod
 
                         if (screenshotPaths.length) {
                             // there is no identifier, to match both, but
                             // we usually get the same order back as we sent it to TestRail
                             const matchingResultId = response.data[i].id;
-
                             screenshotPaths.forEach((screenshot) => {
-                                ColorConsole.debug('sending screenshot to TestRail for TestCase C' + result.getCaseId());
+                                ColorConsole.debug('    sending screenshot to TestRail for TestCase C' + result.case_id);
 
                                 const addScreenShotRequest = this.client.sendScreenshot(
                                     matchingResultId,
                                     screenshot.path,
                                     () => {
-                                        ColorConsole.success('created screenshot');
+                                        ColorConsole.success('    created screenshot');
                                     },
                                     (error) => {
-                                        ColorConsole.error(`could not create screenshot: ${error}`);
+                                        ColorConsole.error(`    could not create screenshot: ${error}`);
                                         ColorConsole.debug('');
                                     }
                                 );
@@ -249,7 +248,8 @@ class TestRail {
                 }
             },
             (statusCode, statusText, errorText) => {
-                ColorConsole.error('Could not send list of TestRail results: ' + statusCode + ' ' + statusText + ' >> ' + errorText);
+                ColorConsole.error('   Could not send list of Cypress results to TestRail : ' 
+                    + statusCode + ' ' + statusText + ' >> ' + errorText);
                 ColorConsole.debug('');
             }
         );

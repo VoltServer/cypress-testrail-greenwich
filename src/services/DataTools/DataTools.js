@@ -24,7 +24,7 @@ class DataTools {
     let postDataInfo = {}
 
     cytrPostData.forEach((postData) => {
-      const { case_id, status_id, comment, elapsed } = postData;
+      const { case_id, status_id, comment, elapsed, screenshotPaths } = postData;
       if (Object.hasOwnProperty.call(postDataInfo, case_id)) {
         if (postDataInfo[case_id].status_id !== 5) { // If one case failed don't process additional cases, Fail trumps all
           postDataInfo[case_id].count += 1;
@@ -33,6 +33,7 @@ class DataTools {
             postDataInfo[case_id].status_id = status_id;
             postDataInfo[case_id].comment = comment;
             postDataInfo[case_id].elapsed = elapsed;
+            postDataInfo[case_id].screenshotPaths = screenshotPaths;
           }
         }
       } else { // a new case to setup
@@ -41,6 +42,7 @@ class DataTools {
         postDataInfo[case_id].status_id = status_id;
         postDataInfo[case_id].comment = comment;
         postDataInfo[case_id].elapsed = elapsed;
+        postDataInfo[case_id].screenshotPaths = screenshotPaths;
       }
     });
     //console.log('postDataInfo', postDataInfo);
@@ -49,6 +51,7 @@ class DataTools {
     Object.keys(postDataInfo).forEach(case_id => {
       var newComment = postDataInfo[case_id].comment;
       // Preserved failed case comments, they contain screenshots 
+      // TODO Always preserved if testrail.runIncludeAll is true
       if (postDataInfo[case_id].count > 1 && postDataInfo[case_id].status_id != 5) {
         newComment = `Summarization of ${postDataInfo[case_id].count} Cypress tests\n\n${newComment}`;
       }
@@ -57,6 +60,7 @@ class DataTools {
         status_id: postDataInfo[case_id].status_id,        
         comment: newComment,
         elapsed: postDataInfo[case_id].elapsed,
+        screenshotPaths: postDataInfo[case_id].screenshotPaths,
       };
       emitPostData.push(resultEntry);
       // ColorConsole.debug('caseDataAggregator >> resultEntry:' +JSON.stringify(resultEntry) );
