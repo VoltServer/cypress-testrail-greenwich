@@ -200,7 +200,7 @@ class TestRail {
             postData.results.push(resultEntry);
         });
         ColorConsole.debug('');
-        // ColorConsole.debug('>> BEFORE postData.results: ' + JSON.stringify(postData));
+        ColorConsole.debug('>> BEFORE postData.results: ' + JSON.stringify(postData));
         postData.results = this.dataTools.caseDataAggregator(postData.results); // cypress-testrail-greenwich mod
         // ColorConsole.debug('>> AFTER postData.results: ' + JSON.stringify(postData)); 
 
