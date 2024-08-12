@@ -1,5 +1,5 @@
 const ColorConsole = require('../../services/ColorConsole');
-const DataTools = require('../../services/DataTools/DataTools');
+const DataTools = require('../../services/DataTools');
 const ApiClient = require('./ApiClient');
 
 
@@ -199,9 +199,9 @@ class TestRail {
             
             postData.results.push(resultEntry);
         });
-        ColorConsole.debug('');
-        ColorConsole.debug('>> BEFORE postData.results: ' + JSON.stringify(postData));
-        postData.results = this.dataTools.caseDataAggregator(postData.results); // cypress-testrail-greenwich mod
+        // ColorConsole.debug('');
+        // ColorConsole.debug('>> BEFORE postData.results: ' + JSON.stringify(postData));
+        postData.results = this.dataTools.aggregateDuplicateResults(postData.results); // cypress-testrail-greenwich mod
         // ColorConsole.debug('>> AFTER postData.results: ' + JSON.stringify(postData)); 
 
         return this.client.sendData(
@@ -210,9 +210,8 @@ class TestRail {
             (response) => {
                 
                 ColorConsole.success('Cypress-TestRail:');
-                ColorConsole.debug('    using sendBatchResults');
-                ColorConsole.success('    cypress results sent to TestRail R' + runID + ' for: ' 
-                    + postData.results.map((r) => 'C' + r.case_id)); // cypress-testrail-greenwich mod
+                ColorConsole.success('Cypress results sent to TestRail R' 
+                    + runID + ' for: ' + postData.results.map((r) => 'C' + r.case_id).join(', '));
 
                 if (this.isScreenshotsEnabled) {
                     const allRequests = [];
