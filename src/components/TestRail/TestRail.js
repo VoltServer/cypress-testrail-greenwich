@@ -1,5 +1,5 @@
 const ColorConsole = require('../../services/ColorConsole');
-const DataTools = require('../../services/DataTools');
+const ResultsAggregator = require('../../services/ResultsAggregator');
 const ApiClient = require('./ApiClient');
 
 
@@ -15,7 +15,7 @@ class TestRail {
     constructor(domain, username, password, isScreenshotsEnabled) {
         this.client = new ApiClient(domain, username, password);
         this.isScreenshotsEnabled = isScreenshotsEnabled;
-        this.dataTools = new DataTools();
+        this.resultsAggregator = new ResultsAggregator();
     }
 
     /**
@@ -201,7 +201,7 @@ class TestRail {
         });
         // ColorConsole.debug('');
         // ColorConsole.debug('>> BEFORE postData.results: ' + JSON.stringify(postData));
-        postData.results = this.dataTools.aggregateDuplicateResults(postData.results); // cypress-testrail-greenwich mod
+        postData.results = this.resultsAggregator.aggregateDuplicateResults(postData.results); // cypress-testrail-greenwich mod
         // ColorConsole.debug('>> AFTER postData.results: ' + JSON.stringify(postData)); 
 
         return this.client.sendData(

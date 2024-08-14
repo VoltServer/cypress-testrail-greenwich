@@ -1,6 +1,6 @@
-const DataTools = require('../../../src/services/DataTools');
+const ResultsAggregator = require('../../../src/services/ResultsAggregator');
 
-const dataTools = new DataTools();
+const resultsAggregator = new ResultsAggregator();
 
 const testData =  [
     {"case_id":"00001",
@@ -112,7 +112,7 @@ const testData =  [
     "elapsed":"6s"
     },
 ]
-// console.log('\nHi from DataTools.spec.js');
+// console.log('\nHi from resultsAggregator.spec.js');
 
 
 describe('aggregation property consistency', () => {
@@ -125,13 +125,13 @@ describe('aggregation property consistency', () => {
             uniqueCase_idCount += 1
             }
         });
-        const results = dataTools.aggregateDuplicateResults(testData);
+        const results = resultsAggregator.aggregateDuplicateResults(testData);
         expect(results.length).toBe(uniqueCase_idCount);        
     });
 
     test('all properties besides, status_id and comment get passed through', () => {
         // This may only work because of the simplicity of testData
-        const results = dataTools.aggregateDuplicateResults(testData);
+        const results = resultsAggregator.aggregateDuplicateResults(testData);
         results.forEach((cdaResult) => {
             testData.forEach((dataResult) => {
                 if (cdaResult.case_id === dataResult.case_id 
@@ -151,19 +151,19 @@ describe('aggregation property consistency', () => {
 describe('Status aggregation rules', () => {
     describe('All statuses are the same', () => {
         test('status of pass and pass gives, pass', () => {
-            const results = dataTools.aggregateDuplicateResults(testData);
+            const results = resultsAggregator.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00001');
             expect(testCaseId.status_id).toBe(1); // pp => p
         });
 
         test('status of skip and skip gives, skip', () => {
-            const results = dataTools.aggregateDuplicateResults(testData);
+            const results = resultsAggregator.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00002');
             expect(testCaseId.status_id).toBe(2); // ss => s
         });
 
         test('status of fail and fail gives, fail', () => {
-            const results = dataTools.aggregateDuplicateResults(testData);
+            const results = resultsAggregator.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00003');
             expect(testCaseId.status_id).toBe(5); // ff => f
         });
@@ -171,25 +171,25 @@ describe('Status aggregation rules', () => {
     describe('Triplet set of statuses', () => {
         // fail always dominate 
         test('status of fail, pass, and skip gives, fail', () => {
-            const results = dataTools.aggregateDuplicateResults(testData);
+            const results = resultsAggregator.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00007');
             expect(testCaseId.status_id).toBe(5); // fsp => f
         });
         // fail always dominate 
         test('status of fail and skip gives, fail', () => {
-            const results = dataTools.aggregateDuplicateResults(testData);
+            const results = resultsAggregator.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00004');
             expect(testCaseId.status_id).toBe(5); // fpp => f
         });
         // fail always dominate 
         test('status of fail and pass gives, fail', () => {
-            const results = dataTools.aggregateDuplicateResults(testData);
+            const results = resultsAggregator.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00005');
             expect(testCaseId.status_id).toBe(5); // fss => f
         });
         // pass dominate skip
         test('status of pass and skip gives, pass', () => {
-            const results = dataTools.aggregateDuplicateResults(testData);
+            const results = resultsAggregator.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00006');
             expect(testCaseId.status_id).toBe(1); // pss => p
         });
