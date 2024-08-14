@@ -126,7 +126,7 @@ describe('aggregation property consistency', () => {
             }
         });
         const results = dataTools.aggregateDuplicateResults(testData);
-        expect(results.length).toBe(uniqueCase_idCount);        
+        expect(results.length).toBe(uniqueCase_idCount);
     });
 
     test('all properties besides, status_id and comment get passed through', () => {
@@ -134,15 +134,15 @@ describe('aggregation property consistency', () => {
         const results = dataTools.aggregateDuplicateResults(testData);
         results.forEach((cdaResult) => {
             testData.forEach((dataResult) => {
-                if (cdaResult.case_id === dataResult.case_id 
+                if (cdaResult.case_id === dataResult.case_id
                     && cdaResult.status_id === dataResult.status_id) { //
-                        Object.keys(testData).forEach(key => {  
-                            if (!key.includes['case_id', 'status_id', 'comment']) { // NOT 
+                        Object.keys(testData).forEach(key => {
+                            if (!key.includes['case_id', 'status_id', 'comment']) { // NOT
                                 // Expect results to be passed through unaltered from input
                                 expect(cdaResult[key]).toBe(dataResult[key]); // the test
                             }
                         });
-                }   
+                }
             });
         })
     });
@@ -154,6 +154,7 @@ describe('Status aggregation rules', () => {
             const results = dataTools.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00001');
             expect(testCaseId.status_id).toBe(1); // pp => p
+            expect(testCaseId.comment).toBe('blablabla');
         });
 
         test('status of skip and skip gives, skip', () => {
@@ -169,19 +170,19 @@ describe('Status aggregation rules', () => {
         });
     });
     describe('Triplet set of statuses', () => {
-        // fail always dominate 
+        // fail always dominate
         test('status of fail, pass, and skip gives, fail', () => {
             const results = dataTools.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00007');
             expect(testCaseId.status_id).toBe(5); // fsp => f
         });
-        // fail always dominate 
+        // fail always dominate
         test('status of fail and skip gives, fail', () => {
             const results = dataTools.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00004');
             expect(testCaseId.status_id).toBe(5); // fpp => f
         });
-        // fail always dominate 
+        // fail always dominate
         test('status of fail and pass gives, fail', () => {
             const results = dataTools.aggregateDuplicateResults(testData);
             const testCaseId = results.find((r) => r.case_id === '00005');
