@@ -1,5 +1,9 @@
 const ResultsAggregator = require('../../../src/services/ResultsAggregator');
 
+const RESULT_STATUS_FAILED = 5;
+const RESULT_STATUS_SKIP = 2;
+const RESULT_STATUS_PASS = 1;
+
 const resultsAggregator = new ResultsAggregator();
 
 const testData =  [
@@ -100,19 +104,20 @@ const testData =  [
     "elapsed":"2s"
     },
     {"case_id":"00007",
-    "status_id":7,
+    "status_id":5,
     "comment":"00007: shows a history ",
     "screenshotPaths":[],
     "elapsed":"1s"
     },
-    {"case_id":"00007",
-    "status_id":5,
-    "comment":"00007: shows a history ",
+    {"case_id":"007",
+    "status_id":7,
+    "comment":"007: shows a history ",
     "screenshotPaths":[],
     "elapsed":"6s"
     },
 ]
 // console.log('\nHi from resultsAggregator.spec.js');
+
 
 
 describe('aggregation property consistency', () => {
@@ -145,6 +150,30 @@ describe('aggregation property consistency', () => {
                 }   
             });
         })
+    });
+
+    test('counts passes fails and skips, correctly', () => {
+        const aggResults = resultsAggregator.aggregateDuplicateResults(testData);
+        aggResults.forEach((aggResult) => {
+            const {case_id, countPass, countFail, countSkip} = aggResult;
+            var tests = testData.filter(test => test.case_id === case_id);
+            var ps, fl, sk;
+            ps = fl = sk = 0;
+            tests.forEach((test) => {
+                if (test.status_id === RESULT_STATUS_PASS) {
+                    ps += 1;
+                } else if (test.status_id === RESULT_STATUS_FAILED) {
+                    fl += 1;
+                } else if (test.status_id === RESULT_STATUS_SKIP) {
+                    sk += 1;
+                }
+            });
+            // console.log('The for case_id count sp, fl, sk:', case_id 
+            //     , ps, countPass,'-', fl, countFail, '-', sk, countSkip);
+            expect(ps).toBe(countPass);
+            expect(fl).toBe(countFail);
+            expect(sk).toBe(countSkip);
+        });       
     });
 });
 
