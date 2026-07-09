@@ -1,330 +1,258 @@
 <p align="center">
-   <img width="200px" src="/assets/cypress.jpg">
+  <img width="200px" src="/assets/cypress.jpg" alt="Cypress logo">
 </p>
-<h1 align="center">(Super Easy) Cypress TestRail Integration</h1>
 
+<h1 align="center">Cypress TestRail Integration - VoltServer Fork</h1>
 
-![Build Status](https://github.com/boxblinkracer/cypress-testrail/actions/workflows/ci_pipe.yml/badge.svg) ![NPM Downloads](https://badgen.net/npm/dt/cypress-testrail) ![GitHub release (latest by date)](https://img.shields.io/github/v/release/boxblinkracer/cypress-testrail) ![NPM License](https://img.shields.io/npm/l/cypress-testrail)
+![NPM License](https://img.shields.io/npm/l/cypress-testrail)
 
-This integration helps you to automatically send test results to TestRail. And yes, super easy and simple!
+This project automates sending Cypress results to TestRail. It is the VoltServer fork of cypress-testrail (v2.10.0), installed from github.com/VoltServer/cypress-testrail-greenwich.
 
-Add your TestRail credentials in Cypress, decide which test results should be sent to TestRail and you're done!
+It is designed to reduce manual validation work by reporting reliable case-level outcomes to TestRail while preserving useful failure evidence.
 
-<!-- TOC -->
-  * [1. Installation](#1-installation)
-  * [2. Setup Wizard](#2-setup-wizard)
-  * [3. Execution Modes](#3-execution-modes)
-    * [3.1 Mode A: Send results to one or more runs in TestRail](#31-mode-a-send-results-to-one-or-more-runs-in-testrail)
-    * [3.2 Mode B: Create new Run in TestRail for every Cypress run](#32-mode-b-create-new-run-in-testrail-for-every-cypress-run)
-  * [4. Register Plugin](#4-register-plugin)
-  * [5. Map Test Cases](#5-map-test-cases)
-  * [6. Advanced Features](#6-advanced-features)
-    * [6.1 Sending Screenshots to TestRail](#61-sending-screenshots-to-testrail)
-    * [6.2 Using multiple Cypress plugins](#62-using-multiple-cypress-plugins)
-    * [6.3 Cucumber Gherkin Support](#63-cucumber-gherkin-support)
-    * [6.4 Get data of new TestRail runs](#64-get-data-of-new-testrail-runs)
-  * [7. Variables](#7-variables)
-    * [7.1 Use on CLI](#71-use-on-cli)
-    * [7.2 Use in cypress.env.json](#72-use-in-cypressenvjson)
-  * [8. Copying / License](#8-copying--license)
-<!-- TOC -->
+## What this fork adds
 
-### 1. Installation
+- ResultsAggregator: deduplicates repeated case results across tests/specs.
+- TestCaseParser: extracts C<id> case tags from test titles.
+- ignoreMissingCaseIds: can suppress missing-case errors for strict runs.
+- Cypress 15 compatibility: documented env vs expose usage.
 
-```ruby 
-npm i cypress-testrail --save-dev
+## Purpose and reporting model
+
+In many suites, one TestRail case is covered by multiple Cypress tests. This integration aggregates those multiple outcomes into one TestRail result per case.
+
+Aggregation rules:
+
+- Any failure means final case result is fail.
+- If there are no failures, pass beats skip.
+- If all results are skip, final case result is skip.
+- For failures, the first failure comment and screenshot are reported.
+- Comments include a short summary of pass/fail/skip counts.
+
+## Architecture
+
+The reporter runs in Node.js inside setupNodeEvents, not in browser-side test code.
+
+```text
+cypress.config.js
+  └─ setupNodeEvents(on, config)
+       └─ new TestRailReporter(on, config).register()
+              ├── before:run  -> create/validate run, log metadata
+              ├── after:spec  -> parse IDs, aggregate, send results
+              └── after:run   -> optionally close run
 ```
 
-Please keep in mind that this integration requires a minimum version of Node.js v13.0.
+Key classes:
 
-Note: Versions of Node < Node 13 may work but will require enabling experimental-modules flag.
+- Reporter: lifecycle orchestration and Cypress event registration.
+- ConfigService / ConfigValueExtractor: resolves config values by priority.
+- TestCaseParser: extracts C<id> IDs (before first colon in title).
+- ResultsAggregator: fail > pass > skip conflict resolution.
+- TestRail / ApiClient: TestRail HTTP API calls.
+- CypressStatusConverter: Cypress state to TestRail status mapping.
 
-### 2. Setup Wizard
+## Installation
 
-The integration has a CLI command that you can use to build your configuration in an interactive way.
-
-Run it with this command and enter your data:
-
-```ruby 
-./node_modules/.bin/cypress-testrail 
+```bash
+npm install github:VoltServer/cypress-testrail-greenwich --save-dev
 ```
 
-Please copy the displayed JSON structure of that command to your `cypress.env.json` file.
+Requires Node.js 13+.
 
-You can of course also build such a JSON manually. In addition to this, you can also use ENV variables or process.env variables. Please see the section on variables below for more.
+## Credentials and base config
 
-Here is a sample of a JSON from the CLI command.
+Keep credentials out of config files.
 
-```yaml 
-{
-  "testrail": {
-    "domain": "my-company.testrail.io",
-    "username": "myUser",
-    "password": "myPwd",
-    "runId": "R123",
-    "screenshots": true
-  }
-}
+```bash
+# shell profile or CI secret store
+export CYPRESS_TESTRAIL_USERNAME="name@yourcompany.com"
+export CYPRESS_TESTRAIL_PASSWORD="your-testrail-api-key"
 ```
 
-Please note that you can use both, the **password** of your TestRail user, or a generated **API key** for the password field.
+Set non-secret defaults in cypress.config.js:
 
-### 3. Execution Modes
-
-The integration has 2 different modes, that you can select while running our **Setup CLI** command.
-
-#### 3.1 Mode A: Send results to one or more runs in TestRail
-
-With this mode, all results are fired against an existing Test Run or a list of Test Runs in TestRail.
-This is a good option if you have already prepared your plan in TestRail and just need to have Cypress doing the work for you.
-
-Please keep in mind, that the provided run must not be closed, so that the TestRail API allows you to send results to it.
-
-Results will only be saved, if the sent TestCaseID is existing in that run inside TestRail.
-
-#### 3.2 Mode B: Create new Run in TestRail for every Cypress run
-
-Sometimes you want to create test runs dynamically inside TestRail.
-For this, just assign the ProjectID and the optional MilestoneID or SuiteId of TestRail in your configuration.
-
-The integration will then start a new run in TestRail and send the results to this one.
-It is also possible to provide a custom (or dynamically created) name for the new test run.
-
-### 4. Register Plugin
-
-Just place this line in your `plugins/index.js` file.
-There's nothing more that is required to register the TestRail reporter.
-
-```javascript 
-const TestRailReporter = require('cypress-testrail');
-
-module.exports = (on, config) => {
-    new TestRailReporter(on, config).register();
-    return config
-}
+```js
+env: {
+  testrail: {
+    domain: 'yourcompany.testrail.com',
+    screenshots: true,
+    ignorePending: true,
+    ignoreMissingCaseIds: true,
+  },
+},
 ```
 
-In addition to this, you can register the reporter with a **custom comment**.
-That comment will then be sent to the TestRail result along with the other metadata,
-such as Cypress version, browser, baseURL and more.
+## Register the reporter
 
-```javascript 
-const customComment = 'AUT v' + Cypress.env('MY_APP_VERSION');
-
-new TestRailReporter(on, config, customComment).register();
-```
-
-If you are running Cypress 10 and higher, then there is no classic plugin/index.js file anymore.
-You can of course still use it. The new `cypress.config.js` has a configuration option called `setupNodeEvents`.
-That one acts as the perfect entrypoint to either directly start the configuration, or just load a separate file.
-
-```javascript
-e2e: {
-    // We've imported your old cypress plugins here.
-    // You may want to clean this up later by importing these.
-    setupNodeEvents(on, config)
-    {
-        return require('./cypress/plugins/index.js')(on, config)
-    }
-,
-}
-```
-
-If you want to register the plugin for using Cypress in "Open" mode,
-please also enable ```experimentalInteractiveRunEvents``` in ```cypress.config.js```
-
-### 5. Map Test Cases
-
-We're almost done.
-You can now map TestRail test cases to your Cypress tests.
-Please use the TestRail case ID as a prefix inside the Cypress test title.
-The plugin will automatically extract it, and send the results to your test run in TestRail.
-The Case ID needs to be at the beginning and separated with an `:` from the rest of the title.
-
-You can also add multiple Case IDs before the `:`. Results will be sent for all found test cases.
-
-```javascript 
-it('C123: My Test for TestRail case 123', () => {
-
-    cy.get('#sw-field--name').type('John');
-    // ...
-    // ...
-
-})
-
-it('C123 C54 C36: My Test for multiple TestRail case IDs', () => {
-
-    cy.get('#sw-field--name').type('John');
-    // ...
-    // ...
-
-})
-```
-
-That's it!
-
-You can now start Cypress (restart after config changes), and all your results should be sent to TestRail as soon as your mapped tests pass or fail!
-
-### 6. Advanced Features
-
-#### 6.1 Sending Screenshots to TestRail
-
-You can automatically send the latest failure screenshot of Cypress to TestRail.
-This is not enabled by default. Just enable it, and it will automatically work.
-Once enabled, the latest failed screenshot is sent to TestRail.
-
-```yaml 
-{
-  "testrail": {
-    "screenshots": true
-  }
-}
-```
-
-If you want to send all failed screenshots to TestRail, just enable the additional (optional) feature.
-This will send all failed screenshots of all attempts in Cypress to TestRail.
-
-```yaml 
-{
-  "testrail": {
-    "screenshots": true,
-    "screenshotsAll": true
-  }
-}
-```
-
-#### 6.2 Using multiple Cypress plugins
-
-Let's start with the most important thing: The problem with the Cypress event listeners.
-
-This integration uses events like "before:run" and more.
-Unfortunately Cypress does not have a list of subscribed event handlers, that means if multiple plugins are using the same event, then they will overwrite each other.
-
-Thanks to @bahmutov we have a solution for this problem (https://github.com/bahmutov/cypress-on-fix).
-
-Please install his package "cypress-on-fix" as described on his website.
-
-#### 6.3 Cucumber Gherkin Support
-
-This integration works with both, plain Cypress tests but also in combination
-with the Cucumber plugin and Gherkin documents (https://github.com/badeball/cypress-cucumber-preprocessor).
-
-Once installed, you can easily prefix the titles of your **Scenario** entries with the TestRail case ID.
-Internally they are converted into Cypress tests, which means everything works as with the plain usage of tests.
-
-```markdown
-Feature: Blog Page Features
-
-Scenario: C123: Filter blog posts by tags
-Given I am on the blog page
-When I click on tag "testing"
-Then I see tag "testing" as title of the page
-```
-
-**Installation**
-
-Please install the cucumber plugin for Cypress as described on their website.
-Also consider the problem of having multiple plugins using the same event listeners as described above.
-
-Once done, you need to configure Cucumber, our Cypress TestRail integration and the cypress-on-fix package.
-Here is a sample configuration with all 3 plugins being used (please note, this is just a sample):
-
-```javascript
-const createBundler = require('@bahmutov/cypress-esbuild-preprocessor');
-const {addCucumberPreprocessorPlugin} = require('@badeball/cypress-cucumber-preprocessor');
-const {createEsbuildPlugin} = require('@badeball/cypress-cucumber-preprocessor/esbuild');
-const {defineConfig} = require('cypress');
+```js
 const TestRailReporter = require('cypress-testrail');
 
 module.exports = defineConfig({
-    e2e: {
-        // sample to configure both, gerhkin documents and plain cypress tests
-        specPattern: ['cypress/e2e/**/*.feature', 'cypress/e2e/**/*.js'],
-
-        async setupNodeEvents(cypressOn, config) {
-            // prepare the fix for event listeners
-            const on = require('cypress-on-fix')(cypressOn)
-
-            // configure cucumber
-            await addCucumberPreprocessorPlugin(on, config);
-            on('file:preprocessor', createBundler({
-                plugins: [createEsbuildPlugin(config)],
-            }));
-
-            // configure TestRail
-            new TestRailReporter(on, config).register();
-
-            return config
-        },
+  e2e: {
+    setupNodeEvents(on, config) {
+      if (config.env.TESTRAIL_RUN_ID) {
+        new TestRailReporter(on, config).register();
+      }
+      return config;
     },
+  },
 });
 ```
 
-That's it! When you now run tests based on Gherkin documents, the TestRail integration will automatically send the results to TestRail.
+Optional custom comment:
 
-#### 6.4 Get data of new TestRail runs
-
-When using the "Create Run Mode", the integration will now create a new file called **created_run.json**.
-This is immediately created after the run was created in TestRail and contains data such as the ID, name and more.
-
-You can use this file to immediately read and use data of the created run in other steps of your CI pipeline, while Cypress is running.
-
-### 7. Variables
-
-This is a list of all available variables and their explanation.
-
-The list shows you the ENV variable name as well as their JSON structure name.
-You can use all variables in both scopes.
-
-Examples on how to use it are below the list.
-
-| ENV / process.env                | JSON                    | Required        | Description                                                                                                                                                                           |
-|----------------------------------|-------------------------|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| CYPRESS_TESTRAIL_DOMAIN          | testrail.domain         | yes             | TestRail domain                                                                                                                                                                       |
-| CYPRESS_TESTRAIL_USERNAME        | testrail.username       | yes             | TestRail username                                                                                                                                                                     |
-| CYPRESS_TESTRAIL_PASSWORD        | testrail.password       | yes             | TestRail password or TestRail API key.                                                                                                                                                |
-| CYPRESS_TESTRAIL_SCREENSHOTS     | testrail.screenshots    | no              | Send last screenshot of failed test.<br />Values: true/false                                                                                                                          |
-| CYPRESS_TESTRAIL_SCREENSHOTS_ALL | testrail.screenshotsAll | no              | Send all screenshots of failed test. (requires screenshots to be enabled).<br />Values: true/false                                                                                    |
-| CYPRESS_TESTRAIL_RUN_ID          | testrail.runId          | yes (Mode A)    | TestRail RunID to fire against, e.g. R123                                                                                                                                             |
-| CYPRESS_TESTRAIL_RUN_IDS         | testrail.runIds         | yes (Mode A)    | TestRail RunIDs to fire against, e.g. ["R123", "R456"]. Either provide single runID or this list. Send comma separated as ENV variable from CLI (xxx="R1,R2"                          |
-| CYPRESS_TESTRAIL_PROJECT_ID      | testrail.projectId      | yes (Mode B)    | TestRail ProjectID, e.g. P45                                                                                                                                                          |
-| CYPRESS_TESTRAIL_MILESTONE_ID    | testrail.milestoneId    | yes (Mode A)    | TestRail MilestoneID, e.g. M4                                                                                                                                                         |
-| CYPRESS_TESTRAIL_SUITE_ID        | testrail.suiteId        | yes/no (Mode B) | TestRail SuiteID, e.g. S8.<br />Some projects might require this!                                                                                                                     |
-| CYPRESS_TESTRAIL_RUN_NAME        | testrail.runName        | no (Mode B)     | Template for the names of created runs. You can provide a fixed text but also use dynamic variables.<br /><br />Variables: (\_\_datetime\_\_) => generates e.g. "01/04/2022 12:45:00" |
-| CYPRESS_TESTRAIL_RUN_INCLUDE_ALL | testrail.runIncludeAll  | no              | Include all test cases in test run creation.<br />Values: true/false                                                                                                                  |
-| CYPRESS_TESTRAIL_RUN_CLOSE       | testrail.closeRun       | no (Mode B)     | Automatically close test runs.<br />Values: true/false                                                                                                                                |
-| CYPRESS_TESTRAIL_IGNORE_PENDING  | testrail.ignorePending  | no              | If enabled, pending Cypress tests will not be sent to TestRail.<br />Values: true/false                                                                                               |
-
-#### 7.1 Use on CLI
-
-To provide variables on CLI just expose them before executing your actual command.
-
-```bash 
-CYPRESS_TESTRAIL_PROJECT_ID=2 CYPRESS_TESTRAIL_MILESTONE_ID=15 ./node_modules/.bin/cypress run 
+```js
+new TestRailReporter(on, config, 'AUT v' + process.env.APP_VERSION).register();
 ```
 
-#### 7.2 Use in cypress.env.json
+## Tagging tests
 
-You can also provide the variables in a JSON structure like this inside your **cypress.env.json** file.
+Put C<id> tags before the first colon in the test title.
 
+```js
+it('C12345: should do the thing', { tags: ['@testRail', '%C12345'] }, () => {
+  // test
+});
+
+it('C12345 C67890: covers two cases', { tags: ['@testRail', '%C12345', '%C67890'] }, () => {
+  // test
+});
 ```
-{
-    "testrail": {
-        "domain": "",
-        "username": "",
-        "password": "",
-        "screenshots": false,
-        "projectId": "",
-        "milestoneId": "",
-        "suiteId": "",
-        "runName": "",
-        "runIncludeAll": false,
-        "closeRun": false,
-        "screenshots": false
-    }
+
+Only tests with case IDs are reported.
+
+## Execution modes
+
+Mode A: report to an existing run
+
+- Provide TESTRAIL_RUN_ID (or TESTRAIL_RUN_IDS).
+- Run must be open.
+
+Mode B: create a new run per Cypress run
+
+- Omit TESTRAIL_RUN_ID.
+- Provide TESTRAIL_PROJECT_ID (optional milestone/suite IDs).
+- Optional TESTRAIL_RUN_NAME supports __datetime__ token.
+- Optional TESTRAIL_RUN_CLOSE closes run at suite end.
+
+## Running with TestRail
+
+```bash
+# Recommended smoke subset first
+npx cypress run \
+  --spec "cypress/e2e/4-inline-comms/*.cy.js" \
+  --env TESTRAIL_RUN_ID=R29785 \
+  --expose DEVICE_ID=voltserv-05dd
+
+# Single spec
+npx cypress run \
+  --spec "cypress/e2e/1-general/history_page.cy.js" \
+  --env TESTRAIL_RUN_ID=R24219 \
+  --expose DEVICE_ID=voltserv-896e
+
+# Full suite
+npx cypress run \
+  --spec "cypress/e2e/**/*.cy.js" \
+  --env TESTRAIL_RUN_ID=R24219 \
+  --expose DEVICE_ID=voltserv-05dd
+```
+
+## Cypress 15: env vs expose
+
+Use env for TestRail values. Use expose for public browser-visible values.
+
+| Flag | Lands in | Use for |
+|---|---|---|
+| --env KEY=val | config.env | TESTRAIL_* values, secrets, Node-side controls |
+| --expose KEY=val | config.expose | DEVICE_ID, grep tags, other public values |
+
+Important: the reporter checks config.env.TESTRAIL_RUN_ID. Passing TESTRAIL_RUN_ID via --expose will not activate the reporter.
+
+## Configuration lookup and keys
+
+Lookup priority:
+
+1. config.env[CLI_KEY] from --env
+2. process.env[CLI_KEY]
+3. config.env.testrail[jsonKey]
+
+| CLI key (--env) | JSON key (testrail.*) | Required | Description |
+|---|---|---|---|
+| TESTRAIL_DOMAIN | domain | Yes | TestRail hostname, no protocol |
+| TESTRAIL_USERNAME | username | Yes | TestRail user email |
+| TESTRAIL_PASSWORD | password | Yes | TestRail API key or password |
+| TESTRAIL_RUN_ID | runId | Yes (Mode A) | Existing run id |
+| TESTRAIL_RUN_IDS | runIds | Alternative | Comma-separated run ids |
+| TESTRAIL_PROJECT_ID | projectId | Yes (Mode B) | Project id |
+| TESTRAIL_MILESTONE_ID | milestoneId | Optional | Milestone id |
+| TESTRAIL_SUITE_ID | suiteId | Optional | Suite id |
+| TESTRAIL_RUN_NAME | runName | Optional | New run name template |
+| TESTRAIL_RUN_CLOSE | closeRun | Optional | Auto-close run |
+| TESTRAIL_RUN_INCLUDE_ALL | runIncludeAll | Optional | Include all suite cases on create |
+| TESTRAIL_SCREENSHOTS | screenshots | Optional | Upload failure screenshot |
+| TESTRAIL_SCREENSHOTS_ALL | screenshotsAll | Optional | Upload all failure screenshots |
+| TESTRAIL_IGNORE_PENDING | ignorePending | Optional | Do not send pending tests |
+| TESTRAIL_IGNORE_MISSING_CASE_IDS | ignoreMissingCaseIds | Optional | Ignore missing case ids in run |
+
+## Screenshots
+
+```js
+env: {
+  testrail: {
+    screenshots: true,
+    screenshotsAll: true,
+  },
+},
+```
+
+## Advanced integration
+
+Multiple plugins on shared Cypress events:
+
+```bash
+npm install cypress-on-fix --save-dev
+```
+
+```js
+async setupNodeEvents(cypressOn, config) {
+  const on = require('cypress-on-fix')(cypressOn);
+  // register additional plugins first
+  new TestRailReporter(on, config).register();
+  return config;
 }
 ```
 
-### 8. Copying / License
+Cucumber/Gherkin support works by tagging Scenario titles with case IDs the same way.
 
-This repository is distributed under the MIT License (MIT).
+```gherkin
+Feature: Blog Page Features
+
+Scenario: C12345: Filter blog posts by tags
+  Given I am on the blog page
+  When I click on tag "testing"
+  Then I see tag "testing" as title of the page
+```
+
+## Created run metadata file
+
+In run-creation mode, created_run.json is written as soon as the run is created so downstream CI steps can consume it.
+
+```json
+{
+  "id": 24300,
+  "name": "Cypress Run 4/29/2026, 10:00:00 AM",
+  "projectId": "1",
+  "milestoneId": "",
+  "suiteId": "2"
+}
+```
+
+## Quick references
+
+- Day-to-day usage: CY-TO-TR-USAGE-GUIDE.md
+- Historical deep-dive details: TESTRAIL-INTEGRATION-README.md
+- Legacy design note: cypress-testrail-greenwich-design.md
+
+## License
+
+Distributed under the MIT License. See LICENSE.md.
